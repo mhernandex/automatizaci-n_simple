@@ -1,31 +1,37 @@
-import requests
+from time import sleep
+from selenium.webdriver.common.by import By
 
-def obtener_clima(driver, user_input):
+
+def obtener_clima(driver, consulta):
     """
-    Obtiene la temperatura actual de una ciudad utilizando el servicio wttr.in.
-    
-    Argumentos:
-        driver: Instancia de Selenium WebDriver (no se usa en esta implementación, pero se mantiene por compatibilidad).
-        user_input: El texto ingresado por el usuario o ya procesado.
-    
-    Retorna:
-        Una cadena con la temperatura o un mensaje de error.
+    Obtiene el clima actual de una ciudad scrapeando Google.
+    Intenta primero el widget interactivo (IDs wob_*), y si no está disponible
+    (Google a veces sirve un layout móvil simplificado a Chrome headless),
+    cae al bloque ".kvKEAb" que contiene temperatura y descripción.
     """
-    # Intentamos extraer el nombre de la ciudad eliminando palabras clave comunes
-    # Esto ayuda si se le pasa el input completo sin procesar previamente
-    city = user_input.lower().replace("clima", "").replace("temperatura", "").replace("en", "").replace("de", "").strip()
-    
+    driver.get(f"https://www.google.com/search?q=clima+{consulta}")
+    # Google sirve una página intermedia ("Haz clic aquí si no se te redirecciona...")
+    # cuando detecta Selenium; esperamos a que termine el redirect y cargue el widget.
+    sleep(3)
+
+    # Plan A: widget bursátil/clima tradicional con IDs estables.
     try:
-        # Realizamos una petición GET al servicio wttr.in
-        # Usamos el parámetro format=%t para recibir únicamente la temperatura (ej. +25°C)
-        response = requests.get(f"https://wttr.in/{city}?format=%t", timeout=10)
-        
-        # Si la respuesta es exitosa (200), devolvemos el texto
-        if response.status_code == 200:
-            return response.text.strip()
-        else:
-            return "No se pudo obtener el clima para esa ubicación (Código de error)."
-            
-    except Exception as e:
-        # Manejo de excepciones en caso de fallo en la conexión o timeout
-        return f"Error de red al obtener el clima: {e}"
+        temperatura = driver.find_element(By.ID, "wob_tm").text
+        ubicacion = driver.find_element(By.ID, "wob_loc").text
+        descripcion = driver.find_element(By.ID, "wob_dc").text
+        return f"{ubicacion}: {descripcion} con {temperatura}°C"
+    except Exception:
+        pass
+
+    # Plan B: layout móvil que recibe Chrome headless.
+    try:
+        # div.nB7Pqb ya incluye el sufijo "°C".
+        temperatura = driver.find_element(By.CSS_SELECTOR, "div.nB7Pqb").text
+        ubicacion = driver.find_element(By.CSS_SELECTOR, "span.d6Ejqe").text
+        # div.d6Ejqe contiene "día hora\nDescripción" (p. ej. "domingo 11:47 p.m.\nNublado").
+        bloque_desc = driver.find_element(By.CSS_SELECTOR, "div.d6Ejqe").text
+        lineas = [linea.strip() for linea in bloque_desc.split("\n") if linea.strip()]
+        descripcion = lineas[-1] if lineas else ""
+        return f"{ubicacion}: {descripcion} con {temperatura}"
+    except Exception:
+        return "No se pudo obtener el clima en este momento."

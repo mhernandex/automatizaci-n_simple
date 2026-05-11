@@ -18,41 +18,36 @@ COMPANY_TICKERS = {
     "tesla motors": "TSLA"
 }
 
-def obtener_precio_accion(driver, user_input):
-    """
-    Busca y retorna el precio actual de una acción utilizando la librería yfinance.
-    
-    Argumentos:
-        driver: Instancia de Selenium WebDriver (opcional).
-        user_input: Input del usuario que contiene el nombre de la empresa.
-    
-    Retorna:
-        El precio formateado como cadena o un mensaje explicativo si no se encuentra.
-    """
-    # Sanitizar el input para extraer únicamente el nombre de la empresa o el ticker
-    company_name = sanitizar(user_input)
-    
-    # Buscar si el nombre está en nuestro mapeo interno de tickers
-    ticker = COMPANY_TICKERS.get(company_name)
-    
-    # Si no está en el mapa, asumimos que el usuario pudo haber ingresado el Ticker directamente
-    if not ticker:
-        ticker = company_name.upper()
+# Palabras a omitir del input para aislar el nombre de la empresa
+_PALABRAS_OMITIR = {"precio", "accion", "valor", "de", "la", "el", "del", "una"}
 
+
+def obtener_precio_accion(driver, consulta):
+    """
+    Obtiene el precio actual de una acción y su divisa usando yfinance.
+    El argumento `driver` se acepta por consistencia con `obtener_clima` aunque
+    yfinance no requiere navegador.
+    """
+    # 1) Aislar el nombre/alias de la empresa quitando palabras clave del input.
+    nombre = " ".join(
+        p for p in consulta.split() if p not in _PALABRAS_OMITIR
+    ).strip()
+
+    # 2) Resolver el ticker: si está en el diccionario lo usamos; si no, asumimos
+    #    que el usuario escribió el ticker directamente.
+    ticker = COMPANY_TICKERS.get(nombre, nombre.upper())
+
+    # 3) Consultar yfinance para obtener precio y divisa.
     try:
-        # Inicializar el objeto Ticker de yfinance
         stock = yf.Ticker(ticker)
-        
-        # Obtener el historial del último día para extraer el precio de cierre más reciente
-        data = stock.history(period="1d")
-        
-        if not data.empty:
-            # Extraer el valor de la columna 'Close' de la última fila disponible
-            price = data['Close'].iloc[-1]
-            return f"${price:.2f}"
-        else:
-            return "No se encontraron datos de cotización (puede que el símbolo sea incorrecto o esté deslistado)."
-            
+        fast = stock.fast_info
+        precio = fast.last_price
+        divisa = fast.currency or "USD"
+
+        if precio is None:
+            return f"No se encontraron datos de cotización para {ticker}."
+
+        return f"{ticker}: ${precio:,.2f} {divisa}"
+
     except Exception as e:
-        # Capturar errores de la API o problemas de red
-        return f"Error al consultar el precio de la acción: {e}"
+        return f"Error al consultar el precio de {ticker}: {e}"

@@ -1,32 +1,22 @@
-def sanitizar(name):
+import unicodedata
+
+
+def sanitizar(texto):
     """
-    Limpia y normaliza el input del usuario eliminando artículos, preposiciones y palabras clave 
-    que no forman parte del nombre del sujeto de búsqueda (ej. el nombre de una empresa).
-    
-    Argumentos:
-        name (str): Cadena de texto a sanitizar.
-        
-    Retorna:
-        str: El nombre del sujeto extraído y limpio.
+    Limpia el texto ingresado por el usuario:
+    - Convierte a minúsculas.
+    - Elimina tildes (á → a, é → e, etc.).
+    - Reemplaza 'ñ' por 'n'.
+    - Elimina diéresis (ü → u).
+
+    Ejemplos:
+        sanitizar("Oaxaca de Juárez")                  -> "oaxaca de juarez"
+        sanitizar("precio de la acción Microsoft")     -> "precio de la accion microsoft"
     """
-    # Lista de prefijos que queremos omitir para aislar el nombre real (ej. "precio de apple" -> "apple")
-    prefixes = [
-        'la ', 'el ', 'de ', 'acción ', 'accion ', 
-        'precio de ', 'precio ', 'stock de ', 'stock ',
-        'valor de ', 'valor '
-    ]
-    
-    # Convertir a minúsculas y quitar espacios en los extremos
-    name = name.lower().strip()
-    
-    changed = True
-    # Bucle para eliminar prefijos de forma iterativa 
-    # Esto permite manejar casos como "la accion de apple" eliminando primero "la accion de " y luego el espacio sobrante.
-    while changed:
-        changed = False
-        for p in prefixes:
-            if name.startswith(p):
-                name = name[len(p):].strip()
-                changed = True
-                
-    return name
+    texto = texto.lower()
+    # 'ñ' debe sustituirse manualmente porque NFKD no la descompone en 'n' + diacrítico.
+    texto = texto.replace("ñ", "n")
+    # Descomponer letras acentuadas en (letra base + marca combinante) y descartar las marcas.
+    descompuesto = unicodedata.normalize("NFKD", texto)
+    sin_diacriticos = "".join(c for c in descompuesto if not unicodedata.combining(c))
+    return sin_diacriticos.strip()
